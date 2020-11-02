@@ -1,0 +1,145 @@
+#!/usr/bin/python3
+
+import argparse
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from typing import List
+
+import yaml
+
+parser = argparse.ArgumentParser()
+# yapf: disable
+parser.add_argument('-c','--config', action='store', default='/etc/applyprofile-config.yaml', help='The path to the config file to read.')
+parser.add_argument('puppet_args', nargs='*', default=[], help='Other arguments passed to puppet, after a --.')
+# yapf: enable
+ARGS = parser.parse_args()
+
+CONFIG = {}
+
+try:
+	CONFIG = yaml.load(open(ARGS.config, 'r'))
+except Exception as e:
+	print('Unable to load configuration: ' + str(e), file=sys.stderr)
+	raise SystemExit(1)
+
+
+def verbose(level: int, message: str) -> None:
+	if CONFIG.get('verbosity', 0) >= level:
+		print(message)
+
+
+def format_shellcommand(argv: List[str]) -> str:
+	args = []
+	for arg in argv:
+		if re.match(r'^[a-zA-Z0-9=._/-]+$', arg) is not None:
+			args.append(arg)
+		else:
+			args.append("'{}'".format(arg.replace("'", "'\\'")))
+	return ' '.join(args)
+
+
+# Create and change to the workspace directory.
+try:
+	if CONFIG.get('cache_dir', None) is None:
+		WDTEMP = tempfile.TemporaryDirectory(prefix='applyprofile.')
+		os.chdir(WDTEMP.name)
+	else:
+		os.makedirs(CONFIG['cache_dir'], exist_ok=True)
+		os.chdir(CONFIG['cache_dir'])
+except Exception as e:
+	print('Unable to create or access working directory: ' + str(e), file=sys.stderr)
+	raise SystemExit(1)
+
+verbose(3, '$ cd ' + format_shellcommand(os.getcwd()))
+
+# Try to ensure privacy if possible.
+try:
+	os.chmod('.', 0o0700)
+except:
+	pass
+
+# Are we even configured?
+if CONFIG.get('profile_url', None) is None:
+	print('No profile defined in the configuration file.  Taking no action.')
+	raise SystemExit(0)
+
+
+def download_file(source: str, target: str) -> bool:
+	try:
+		cmd = ['curl', '-f', '-s', '-o', target, source]
+		verbose(3, '$ ' + format_shellcommand(cmd))
+		subprocess.run(cmd, check=True)
+	except subprocess.CalledProcessError:
+		return False
+	return True
+
+
+# Download the profile.
+profile_filename = 'profile' + os.path.splitext(CONFIG['profile_url'])[1]
+
+PROFILE_UPDATED = False
+try:
+	pre_stat = os.stat(profile_filename)
+except Exception:
+	PROFILE_UPDATED = True  # Well, we can't confirm it was the same, so no optimization.
+
+verbose(1, 'Downloading profile...')
+if not download_file(CONFIG['profile_url'], profile_filename):
+	print('Failed to download profile.  Aborting.', file=sys.stderr)
+	raise SystemExit(1)
+
+post_stat = os.stat(profile_filename)
+if not PROFILE_UPDATED and pre_stat.st_mtime != post_stat.st_mtime:
+	PROFILE_UPDATED = True
+
+# Download the signature.
+if CONFIG.get('signature_url', None) is not None:
+	verbose(1, 'Downloading signature...')
+	if not download_file(CONFIG['signature_url'], profile_filename + '.sig'):
+		print('Failed to download signature.  Aborting.', file=sys.stderr)
+		raise SystemExit(1)
+
+	# Of course this doesn't matter if we can't verify it.
+	if CONFIG.get('keyring', None) is not None:
+		verbose(1, 'Verifying signature...')
+		try:
+			cmd = ['gpgv', '--keyring', CONFIG['keyring'], '--ignore-time-conflict', profile_filename + '.sig']
+			verbose(3, '$ ' + format_shellcommand(cmd))
+			subprocess.run(cmd, check=True)
+		except subprocess.CalledProcessError:
+			print('Unable to verify GPG signature.  Aborting.', file=sys.stderr)
+			raise SystemExit(1)
+
+# Safe! Time to run puppet.
+
+# First we need to extract the configuration, if it was updated.
+if PROFILE_UPDATED:
+	try:
+		verbose(4, '$ rm -rf puppet_profile')
+		shutil.rmtree('puppet_profile')
+	except FileNotFoundError:
+		pass
+	verbose(4, '$ mkdir puppet_profile')
+	os.makedirs('puppet_profile', exist_ok=True)
+	try:
+		verbose(4, '$ tar -xf ' + format_shellcommand([profile_filename, '-C', 'puppet_profile']))
+		shutil.unpack_archive(profile_filename, extract_dir='puppet_profile')
+	except Exception as e:
+		print('Unable to extract profile archive:' + str(e), file=sys.stderr)
+		raise SystemExit(1)
+
+# We've already done GPG verification, so we're good to go.  We'll just straight hand off to puppet now.
+
+puppet_cmd = [
+    'puppet',
+    'apply',
+    '--modulepath=' + os.path.join(os.getcwd(), 'puppet_profile', 'modules'),
+    '--hiera_config=' + os.path.join(os.getcwd(), 'puppet_profile', 'hiera.yaml'),
+    os.path.join(os.getcwd(), 'puppet_profile', 'manifests'),
+] + CONFIG.get('puppet_args', []) + ARGS.puppet_args
+verbose(2, '$ ' + format_shellcommand(puppet_cmd))
+subprocess.run(puppet_cmd, check=True)

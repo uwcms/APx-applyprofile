@@ -1,0 +1,24 @@
+# The url to download the puppet profile from.
+#profile_url: http://example.com/puppet-profile.tbz2
+
+# The optional URL of a GPG signature file containing
+#signature_url: http://example.com/puppet-profile.tbz2.sig
+
+# A GPG keyring file containing keys authorized to verify `profile_sig`.
+#keyring: /dev/null
+
+# A location to cache the profile and other data between runs.
+# If null, the default, a new temporary directory will be used for each run.
+#cache_dir: /var/run/applyprofile
+
+# Add the following arguments to the puppet apply command-line, in addition to
+# any extra command line parameters supplied to applyprofile.
+puppet_args: []
+
+# Specify the verbosity level.  Higher numbers are more verbose.
+#   0: Errors only.
+#   1: List high-level operations
+#   2: List puppet command executed
+#   3: List significant commands executed
+#   4: List all (simulated) commands executed
+verbosity: 1

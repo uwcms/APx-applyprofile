@@ -1,0 +1,15 @@
+[Unit]
+Description=Apply the configured puppet profile
+Wants=network-online.target network.target
+After=network-online.target network.target sysinit.target basic.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/applyprofile -- --logdest=console
+
+[Install]
+# We don't install ourselves directly into boot, but rather install
+# applyprofile-onboot.timer, in hopes that we will run only after the system
+# has settled.  Systemd has no good way to ensure this otherwise, but we want
+# to avoid reconfiguring any services at a time that may result in strange
+# behavior relative to services being started or stopped.

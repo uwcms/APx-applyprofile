@@ -1,0 +1,12 @@
+[Unit]
+Description=Apply the configured puppet profile 60 seconds after boot.
+Wants=network-online.target network.target
+After=network-online.target network.target sysinit.target basic.target
+
+[Timer]
+Unit=applyprofile.service
+OnStartupSec=60
+RemainAfterElapse=yes
+
+[Install]
+WantedBy=multi-user.target
