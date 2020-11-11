@@ -107,7 +107,10 @@ if CONFIG.get('signature_url', None) is not None:
 	if CONFIG.get('keyring', None) is not None:
 		verbose(1, 'Verifying signature...')
 		try:
-			cmd = ['gpgv', '--keyring', CONFIG['keyring'], '--ignore-time-conflict', profile_filename + '.sig']
+			cmd = [
+			    'gpgv', '--keyring', CONFIG['keyring'], '--ignore-time-conflict', profile_filename + '.sig',
+			    profile_filename
+			]
 			verbose(3, '$ ' + format_shellcommand(cmd))
 			subprocess.run(cmd, check=True)
 		except subprocess.CalledProcessError:
