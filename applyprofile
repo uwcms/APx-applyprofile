@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+import fcntl
 import os
 import re
 import shutil
@@ -10,6 +11,16 @@ import tempfile
 from typing import List
 
 import yaml
+
+
+def unbuffer(fd: int) -> None:
+	fl = fcntl.fcntl(fd, fcntl.F_GETFL)
+	fl |= os.O_SYNC
+	fcntl.fcntl(fd, fcntl.F_SETFL, fl)
+
+
+unbuffer(sys.stdout.fileno())
+unbuffer(sys.stderr.fileno())
 
 parser = argparse.ArgumentParser()
 # yapf: disable
