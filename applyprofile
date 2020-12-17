@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
 import argparse
-import fcntl
 import os
 import re
 import shutil
@@ -12,15 +11,8 @@ from typing import List
 
 import yaml
 
-
-def unbuffer(fd: int) -> None:
-	fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-	fl |= os.O_SYNC
-	fcntl.fcntl(fd, fcntl.F_SETFL, fl)
-
-
-unbuffer(sys.stdout.fileno())
-unbuffer(sys.stderr.fileno())
+sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 1)
+sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 1)
 
 parser = argparse.ArgumentParser()
 # yapf: disable
@@ -151,9 +143,8 @@ if PROFILE_UPDATED:
 puppet_cmd = [
     'puppet',
     'apply',
-    '--modulepath=' + os.path.join(os.getcwd(), 'puppet_profile', 'modules'),
-    '--hiera_config=' + os.path.join(os.getcwd(), 'puppet_profile', 'hiera.yaml'),
-    os.path.join(os.getcwd(), 'puppet_profile', 'manifests'),
+    '--environmentpath=' + os.getcwd(),
+    '--environment=puppet_profile',
 ] + CONFIG.get('puppet_args', []) + ARGS.puppet_args
 verbose(2, '$ ' + format_shellcommand(puppet_cmd))
 subprocess.run(puppet_cmd, check=True)
