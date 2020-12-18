@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
 import argparse
+import atexit
+import fcntl
 import os
 import re
 import shutil
@@ -44,6 +46,19 @@ def format_shellcommand(argv: List[str]) -> str:
 			args.append("'{}'".format(arg.replace("'", "'\\'")))
 	return ' '.join(args)
 
+
+LOCKFD = os.fdopen(os.open('/run/applyprofile.lock', os.O_RDWR | os.O_CREAT), 'r+')
+try:
+	fcntl.lockf(LOCKFD, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+	otherpid = LOCKFD.read().strip()
+	print("Another instance of applyprofile is already running (pid {}).".format(otherpid), file=sys.stderr)
+	raise SystemExit(1)
+LOCKFD.seek(0, os.SEEK_SET)
+LOCKFD.truncate(0)
+LOCKFD.write('{}\n'.format(os.getpid()))
+LOCKFD.flush()
+atexit.register(os.unlink, '/run/applyprofile.lock')
 
 # Create and change to the workspace directory.
 try:
