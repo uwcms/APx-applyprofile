@@ -22,3 +22,7 @@ puppet_args: []
 #   3: List significant commands executed
 #   4: List all (simulated) commands executed
 verbosity: 1
+
+# Define additional variables to add to the environment. String values only.
+#extra_environment:
+#  VAR: value

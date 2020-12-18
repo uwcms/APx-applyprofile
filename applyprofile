@@ -57,7 +57,7 @@ except Exception as e:
 	print('Unable to create or access working directory: ' + str(e), file=sys.stderr)
 	raise SystemExit(1)
 
-verbose(3, '$ cd ' + format_shellcommand(os.getcwd()))
+verbose(3, '$ cd ' + format_shellcommand([os.getcwd()]))
 
 # Try to ensure privacy if possible.
 try:
@@ -140,6 +140,9 @@ if PROFILE_UPDATED:
 
 # We've already done GPG verification, so we're good to go.  We'll just straight hand off to puppet now.
 
+for k, v in CONFIG.get('extra_environment', {}).items():
+	os.environ[k] = str(v)
+
 puppet_cmd = [
     'puppet',
     'apply',
@@ -147,4 +150,4 @@ puppet_cmd = [
     '--environment=puppet_profile',
 ] + CONFIG.get('puppet_args', []) + ARGS.puppet_args
 verbose(2, '$ ' + format_shellcommand(puppet_cmd))
-subprocess.run(puppet_cmd, check=True)
+subprocess.run(puppet_cmd, stdin=subprocess.DEVNULL, check=True)
